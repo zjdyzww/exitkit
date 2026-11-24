@@ -97,3 +97,43 @@ I could not get a real platform export, so I ran the tool against a **real archi
 两次都是真实数据先打我的脸，然后才改对。自检 17 → 19 例，两条新断言都注入验证过会红。
 
 **这仍然不等于"验证过真实平台导出"**：它验证的是机制在真实规模与真实脏数据下的行为。平台特有的怪癖（页 ID 后缀、`%XX` 链接）仍是外部来源描述，标 UNVERIFIED。
+
+## DFC / Open Food Network: predicting the import's losses from its source
+
+The second target is not a note-taking app. It is an **open-source, community-owned food commerce platform** — Open Food Network (AGPL-3.0, 1,303 stars, active) — which imports product catalogs in the **DFC** interchange format. Five of its open issues are the same family of failure: the import loses fields.
+
+Rather than guess, `src/dfc.mjs` reads the import mapping out of their source and predicts the losses, each rule citing `file:line` at a pinned commit:
+
+| rule | what their code does | predicted loss |
+|---|---|---|
+| `variant-name-overwritten` | `variant.display_name = supplied_product.name` (`supplied_product_importer.rb:117`) | each spec's own name is replaced by the product name |
+| `unit-taken-from-product-quantity` | `QuantitativeValueBuilder.apply(supplied_product.quantity, variant)`, `value = quantity.value * unit_scale` (`:119` + `quantitative_value_builder.rb:32`) | spec-level unit/scale is not used; kg↔g style scale changes |
+| `single-taxon-only` | `variant.primary_taxon = taxon(supplied_product)` (`:118`) | only one category survives |
+| `tax-category-not-applied` | `apply()` writes price and stock only (`offer_builder.rb:30`) | tax category is not assigned |
+
+```bash
+node src/dfc.mjs --graph fixtures/dfc/beer-catalog.json   # 4 predicted losses, each with a citation
+node tests/dfc-roundtrip.mjs                              # 9 assertions, both directions
+```
+
+**This is a prediction read from source, not a measurement.** The receipt says so in its first line, and it lists what it cannot check (runtime transforms, downstream tax defaults). Pinned commit: `e13ef4d7fdc85d6f165638f574cec1492437750d`.
+
+Both directions are tested, because a predictor that only ever fires is not a predictor:
+
+| injection | result |
+|---|---|
+| make it never report anything | 3 assertions FAIL (exit 1) |
+| make it always report one loss | "clean catalog ⇒ 0" FAILs (exit 1) |
+| strip a rule's citation | the rule-table assertion FAILs first (exit 1) |
+
+## Licence landscape (measured, not assumed)
+
+"Open source" does not mean "commercially usable". Read the LICENSE:
+
+| project | stars | licence | commercial use |
+|---|---|---|---|
+| Open Food Network | 1,303 | AGPL-3.0 | allowed (copyleft + network clause) |
+| Medusa | 37,388 | MIT except Enterprise | allowed |
+| Saleor | 23,600 | BSD-3 | allowed, cleanest |
+| Vendure | 8,614 | GPLv3 or commercial | copyleft |
+| CoopCycle | 605 | custom "Coopyleft": commercial use reserved to qualifying entities | **restricted** |

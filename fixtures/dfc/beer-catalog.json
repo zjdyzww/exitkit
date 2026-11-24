@@ -1,0 +1,35 @@
+{
+  "@context": "https://static.datafoodconsortium.org/ontologies/context.json",
+  "@graph": [
+    {
+      "@type": "dfc-b:SuppliedProduct",
+      "@id": "https://example.org/product/biere-blanche",
+      "dfc-b:name": "Bière blanche",
+      "dfc-b:description": "Witbier 5%",
+      "dfc-b:productType": ["dfc-m:BEVERAGE", "dfc-m:ALCOHOLIC_BEVERAGE"],
+      "dfc-b:quantity": { "@type": "dfc-b:QuantitativeValue", "dfc-b:value": 1, "dfc-b:unit": "dfc-m:KILOGRAM" },
+      "dfc-b:variants": [
+        {
+          "@type": "dfc-b:SuppliedProduct",
+          "@id": "https://example.org/product/biere-blanche/bouteille",
+          "dfc-b:name": "Bouteille 33cl",
+          "dfc-b:quantity": { "@type": "dfc-b:QuantitativeValue", "dfc-b:value": 0.33, "dfc-b:unit": "dfc-m:LITRE" }
+        },
+        {
+          "@type": "dfc-b:SuppliedProduct",
+          "@id": "https://example.org/product/biere-blanche/fut",
+          "dfc-b:name": "Fût 5L",
+          "dfc-b:quantity": { "@type": "dfc-b:QuantitativeValue", "dfc-b:value": 5, "dfc-b:unit": "dfc-m:LITRE" }
+        }
+      ],
+      "dfc-b:catalogItems": [
+        {
+          "@type": "dfc-b:CatalogItem",
+          "dfc-b:offers": [
+            { "@type": "dfc-b:Offer", "dfc-b:price": { "dfc-b:value": 3.8 }, "dfc-b:taxCategory": "fr:tax-5.5" }
+          ]
+        }
+      ]
+    }
+  ]
+}
