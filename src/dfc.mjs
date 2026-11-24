@@ -50,6 +50,7 @@ export const RULES = [
     id: 'taxon-falls-back-to-first',
     at: 'engines/dfc_provider/app/services/product_type_importer.rb:19',
     does: 'taxons.first || Spree::Taxon.first   // 源码注释自述：“If we don’t find any matching taxon, we return a random one”',
+    upstream: 'PR #14950（open，2026-10-26，Closes #14864）已修：无映射时保留 variant 现有分类，再回落到产品分类，最后才第一个 taxon',
     means: '分类只按单个 productType 查 dfc_id 映射；**查不到就落到该实例的第一个分类**。是否能对上取决于目标实例的 dfc_id 表，导出方无法预知',
   },
   {
@@ -143,6 +144,7 @@ export function predictLosses({ products }) {
       losses.push({
         field: 'product.categories[]', scope: `product:${p.name}`, rule: r.id, at: r.at,
         detail: `源 productType=${types.join(' / ')}；只按单个类型查 dfc_id 映射，**查不到就落到目标实例的第一个分类**（源码注释自述 random）。映射是否存在我无法从仓库判断`,
+        upstream: r.upstream ?? null,
       });
     }
     // R4：税分类不赋值
@@ -168,9 +170,9 @@ export function renderReceipt(losses, { commit = OFN_COMMIT } = {}) {
     lines.push('未预测到字段级丢失（不代表真的不丢：本模型只覆盖 4 条已读源码的规则）。');
     return lines.join('\n');
   }
-  lines.push('| 字段 | 范围 | 会丢什么 | 出处 |');
-  lines.push('|---|---|---|---|');
-  for (const l of losses) lines.push(`| \`${l.field}\` | ${l.scope} | ${l.detail} | \`${l.at}\` |`);
+  lines.push('| 字段 | 范围 | 会丢什么 | 出处 | 上游状态 |');
+  lines.push('|---|---|---|---|---|');
+  for (const l of losses) lines.push(`| \`${l.field}\` | ${l.scope} | ${l.detail} | \`${l.at}\` | ${l.upstream ?? '**无人跟进**'} |`);
   lines.push('');
   lines.push('## 核不了（必须你在真实实例上验）');
   lines.push('');

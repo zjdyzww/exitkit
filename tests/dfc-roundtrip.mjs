@@ -55,6 +55,13 @@ const taxLoss = losses.find((l) => /taxCategory/.test(l.field));
 ok('税丢失被描述为“回落到默认税分类”而非“为空”', !!taxLoss && /默认税分类/.test(taxLoss.detail) && !/导入后为空/.test(taxLoss.detail));
 ok('税的回落逻辑有出处（variant.rb:204-206）', !!taxLoss && /variant\.rb:204-206/.test(taxLoss.detail + taxLoss.at));
 
+// 已知/在修 vs 无人跟进：收据必须区分，否则会拿别人的已知项当自己的发现
+const taxUp = losses.find((l) => /taxCategory/.test(l.field));
+const catUp = losses.find((l) => /categories/.test(l.field));
+ok('分类规则标注了上游 PR #14950（已知在修）', !!catUp && /14950/.test(catUp.upstream ?? ''));
+ok('税规则标注为“无人跟进”', !!taxUp && (taxUp.upstream ?? null) === null);
+ok('收据渲染出上游状态列', /上游状态/.test(renderReceipt(losses)) && /无人跟进/.test(renderReceipt(losses)));
+
 // 方向一(b)：同一物理量的两种写法（1 KILOGRAM vs 1000 GRAM）必须都被识别为“标度会变”，且带精确乘数
 const kg = JSON.parse(readFileSync(join(here, '..', 'fixtures', 'dfc', 'gram-vs-kilogram.json'), 'utf8'));
 const kgLosses = predictLosses(analyzeGraph(kg));

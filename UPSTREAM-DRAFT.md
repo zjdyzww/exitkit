@@ -12,6 +12,12 @@
 4. [ ] 附最小语料（可直接粘的 JSON），让他们能一分钟复现
 5. [ ] 不承诺 PR、不要 star、不问报酬
 
+## 发帖前必须声明的前情（否则会像没做功课）
+
+**PR #14950（open，2026-10-26，Closes #14864）已经修了"分类查不到映射就落到第一个分类"**，并且它的描述与我从源码读到的机制完全一致。
+
+所以我的帖子**不能再把分类回落当发现**，只能收敛到 #14950 没有覆盖的两处：**税分类的静默回落** 与 **单位乘数导致的标度变化**。帖子里必须先写一句"我看到 #14950 覆盖了分类，下面是我在它范围之外看到的"。
+
 ## 草稿（英文，贴 #14865）
 
 > **Tax category is silently replaced, not omitted**
@@ -44,7 +50,9 @@
 >
 > Expected: imported variant's tax category == `fr:tax-5.5`. Observed by reading: no assignment on the import path, so `tax_category` resolves to the default. I have not run this against an instance — if a downstream step (fee applicator? `ProductGroupBuilder`?) does assign it, ignore me.
 >
-> Related, same function: `variant.display_name = supplied_product.name` (`:117`), `QuantitativeValueBuilder.apply(supplied_product.quantity, variant)` using the **product-level** quantity (`:119`, multipliers at `quantitative_value_builder.rb:99-102`), and the taxon lookup: `ProductTypeImporter.taxon` ends with `taxons.first || Spree::Taxon.first` (`product_type_importer.rb:19`) — their own comment says "If we don't find any matching taxon, we return a random one". So a catalog whose product type has no `dfc_id` in the target instance is filed under the **first** category rather than left unclassified. Those look like the same family as #14861/#14862/#14864.
+> I saw #14950 already fixes the category fallback ("can't be mapped" -> keep existing), so I am not reporting that. What it does not cover, as far as I can read:
+>
+> `variant.display_name = supplied_product.name` (`:117`), `QuantitativeValueBuilder.apply(supplied_product.quantity, variant)` using the **product-level** quantity (`:119`, multipliers at `quantitative_value_builder.rb:99-102`), and the taxon lookup: `ProductTypeImporter.taxon` ends with `taxons.first || Spree::Taxon.first` (`product_type_importer.rb:19`) — their own comment says "If we don't find any matching taxon, we return a random one". So a catalog whose product type has no `dfc_id` in the target instance is filed under the **first** category rather than left unclassified. Those look like the same family as #14861/#14862/#14864.
 
 ## 若被回应"有用/可复现"
 
