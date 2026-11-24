@@ -14,7 +14,7 @@
 // @skill write_receipt — <out>/receipt.md 人读收据：能带走 / 会丢 / 核不了，三段齐全
 // @skill verify — --verify <dir>：重算 sha256 与清单比对，missing/extra/mismatch 任一 ⇒ exit 1 并点名
 // @skill render_from_manifest — --report <dir>：不读源包、只从 manifest+losses 重出 receipt.md（幂等；缺清单则如实失败）
-// @skill flag_path_risks — 路径长度 ≥200 字符进 losses 的 risk（平台官方 FAQ 明写 Windows 260 字符限制），不当成丢失、也不忽略
+// @skill flag_path_risks — 路径长度 ≥200 字符、同名文件、**生成式重名后缀**（`-1` / ` 1a2b3c`，来自真实迁移工具的解析实现）、**链接里的 URL 编码路径** 一律进 risk，不当成丢失、也不忽略
 //
 // @rule no_network P0 — 本工具不发任何网络请求（只读本地导出包）；违反即视为缺陷
 // @rule no_silent_loss P0 — 任何未被 canonical 表达的文件或构造，必须出现在 losses；解析器不得静默跳过未知文件类型
@@ -23,6 +23,8 @@
 // @rule unverifiable_is_declared P0 — 导出包无法证明的丢失，必须写成"需自查"条目，不得省略、不得写成已核实
 // @rule deterministic P1 — 同一输入两次运行，manifest.json 除 generatedAt 外逐字节相同；--report 重出的 receipt 必须与首次写入内容一致
 // @rule risk_is_not_loss P1 — 超长路径等“风险”进 losses 的 risk 分类，不得写成已丢失，也不得静默忽略
+// @rule suffix_duplicate_detected P1 — 平台给重名页加后缀（`-1`/` 1a2b3c`）时文件名并不相等；只查完全相同会漏掉，必须按“去后缀后同基名”再查一次
+// @rule url_encoded_link_is_risk P1 — md 链接里出现 %XX 编码路径时必须报 risk（导入后链接会指向不存在的转义名）
 //
 // @depends node >= 20；系统 `unzip`（仅 --from *.zip 时需要）
 // @phase Phase1
@@ -125,6 +127,9 @@ export function detectLossesInMarkdown(rel, text) {
   const htmlBlocks = (text.match(/<(table|figure|details|iframe|video)\b/gi) ?? []);
   if (htmlBlocks.length > 0) push('HTML-only block (no Markdown equivalent)', `${htmlBlocks.length} 处内嵌 HTML（平台导出用 HTML 兜底，回灌时会丢）`);
 
+  const encoded = (text.match(/\]\([^)]*%[0-9A-Fa-f]{2}[^)]*\)/g) ?? []);
+  if (encoded.length > 0) push('risk: url-encoded path in link', `${encoded.length} 处链接含 %XX 编码（导入后指向转义名，链接会失效）`);
+
   const base64 = (text.match(/!\[[^\]]*\]\(data:[^)]+\)/g) ?? []);
   if (base64.length > 0) push('inline data-URI image', `${base64.length} 处内联 base64 图片（体积大、多数替代品不认）`);
 
@@ -199,6 +204,18 @@ export function buildExport({ from, out, dryRun = false, version = VERSION }) {
     }
     for (const [b, n] of byBase) {
       if (n > 1) losses.push({ construct: 'risk: duplicate filename', evidence: b, note: `${n} 个文件同名（不同目录）；导入扁平化的替代品时会互相覆盖` });
+    }
+    // 平台给重名页加后缀（`-1` 或 ` 1a2b3c`），文件名因此不相等 —— 只查完全相同会漏
+    const stemOf = (b) => b.replace(/\.(md|csv|markdown)$/i, '').replace(/(?:[- ]\d+|[ ][0-9a-f]{6,32})$/i, '');
+    const byStem = new Map();
+    for (const e of entries) {
+      const base = e.path.split('/').pop();
+      const stem = stemOf(base);
+      if (stem === base.replace(/\.(md|csv|markdown)$/i, '')) continue;  // 没有后缀，不是生成式重名
+      byStem.set(stem, [...(byStem.get(stem) ?? []), e.path]);
+    }
+    for (const [stem, paths] of byStem) {
+      losses.push({ construct: 'risk: generated duplicate suffix', evidence: paths[0], note: `${paths.length} 个文件带后缀指向同一基名「${stem}」（${paths.map((x) => x.split('/').pop()).join(', ')}）；替代品可能合并或覆盖` });
     }
 
     const manifest = {
@@ -362,6 +379,30 @@ function selfTest() {
     const rout = join(base, 'out-long');
     const rlong = buildExport({ from: lsrc, out: rout });
     ok('超长路径进 risk（且不写成丢失）', rlong.losses.some((l) => /risk: very long path/.test(l.construct)));
+    // 真实坑 1：生成式重名后缀（-1 / 1a2b3c）必须被查出，尽管文件名不相等
+    const dsrc = join(base, 'dupsuf');
+    ensureDir(dsrc);
+    writeFileSync(join(dsrc, 'Notes.md'), 'a', 'utf8');
+    writeFileSync(join(dsrc, 'Notes-1.md'), 'b', 'utf8');
+    writeFileSync(join(dsrc, 'Notes 1a2b3c.md'), 'c', 'utf8');
+    const dres = buildExport({ from: dsrc, out: join(base, 'out-dup') });
+    ok('生成式重名后缀 ⇒ risk（按去后缀基名查出）', dres.losses.filter((l) => /generated duplicate suffix/.test(l.construct)).length >= 1);
+    ok('同名但不同目录仍单独报（两类互不替代）', (() => {
+      const s2 = join(base, 'dupexact');
+      ensureDir(join(s2, 'a'));
+      ensureDir(join(s2, 'b'));
+      writeFileSync(join(s2, 'a', 'same.md'), 'x', 'utf8');
+      writeFileSync(join(s2, 'b', 'same.md'), 'y', 'utf8');
+      const rr = buildExport({ from: s2, out: join(base, 'out-dup2') });
+      return rr.losses.some((l) => /duplicate filename/.test(l.construct));
+    })());
+    // 真实坑 2：链接里的 URL 编码必须报 risk
+    const usrc = join(base, 'urlenc');
+    ensureDir(usrc);
+    writeFileSync(join(usrc, 'p.md'), '[x](Project%20Alpha/Page%201.md)\n', 'utf8');
+    const ures = buildExport({ from: usrc, out: join(base, 'out-url') });
+    ok('链接含 URL 编码 ⇒ risk', ures.losses.some((l) => /url-encoded/.test(l.construct)));
+
     // --report 幂等：重出的收据内容必须与首次一致
     const rep = report(rout);
     ok('--report 重出收据幂等（内容不变）', rep.changed === false);
