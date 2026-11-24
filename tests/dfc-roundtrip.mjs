@@ -41,9 +41,10 @@ const model = analyzeGraph(graph);
 const losses = predictLosses(model);
 const rules = new Set(losses.map((l) => l.rule));
 
-ok('多规格语料 ⇒ 预测 ≥4 条字段级丢失', losses.length >= 4, `${losses.length} 条`);
-ok('覆盖 4 条源码规则', rules.size === 4, [...rules].join(', '));
-ok('分类规则是“落到第一个分类”而非“多分类被截断”', losses.some((l) => /第一个分类/.test(l.detail)) && !losses.some((l) => /其余丢失/.test(l.detail)));
+ok('多规格语料 ⇒ 预测 ≥3 条字段级丢失（真实夹具无 productType，R3 不触发）', losses.length >= 3, `${losses.length} 条`);
+ok('覆盖 3 条可由真实词汇触发的规则', rules.size === 3 && [...rules].every((r) => r !== 'taxon-falls-back-to-first'), [...rules].join(', '));
+ok('R3（分类回落）保留在规则表但真实夹具未覆盖其触发键', RULES.some((r) => r.id === 'taxon-falls-back-to-first') && !losses.some((l) => l.rule === 'taxon-falls-back-to-first'));
+ok('分类规则文本是“落到第一个分类”而非“多分类被截断”', (() => { const r = RULES.find((x) => x.id === 'taxon-falls-back-to-first'); return /第一个分类/.test(r.means) && !/其余丢失/.test(r.means); })());
 ok('每条预测都带合法出处（file.rb:NN）', losses.every((l) => /\.rb:\d+/.test(l.at)), losses.filter((l) => !/\.rb:\d+/.test(l.at)).map((l) => l.rule).join(',') || 'all ok');
 ok('出处固定到 commit', /^[0-9a-f]{40}$/.test(OFN_COMMIT), OFN_COMMIT.slice(0, 8));
 const receipt = renderReceipt(losses);
@@ -51,15 +52,15 @@ ok('收据写明"按源码预测，不是实测"', /按源码预测，不是实�
 ok('收据含"核不了"段（不得隐瞒未验部分）', /核不了（必须你在真实实例上验）/.test(receipt));
 
 // 税的后果必须说准：不是“为空”，而是回落到实例默认税（否则这个断言会把“错税率”说成“缺数据”）
-const taxLoss = losses.find((l) => /taxCategory/.test(l.field));
+const taxLoss = losses.find((l) => /VATrate/.test(l.field));
 ok('税丢失被描述为“回落到默认税分类”而非“为空”', !!taxLoss && /默认税分类/.test(taxLoss.detail) && !/导入后为空/.test(taxLoss.detail));
 ok('税的回落逻辑有出处（variant.rb:204-206）', !!taxLoss && /variant\.rb:204-206/.test(taxLoss.detail + taxLoss.at));
 
 // 已知/在修 vs 无人跟进：收据必须区分，否则会拿别人的已知项当自己的发现
-const taxUp = losses.find((l) => /taxCategory/.test(l.field));
-const catUp = losses.find((l) => /categories/.test(l.field));
+const taxUp = losses.find((l) => /VATrate/.test(l.field));
+const catUp = RULES.find((r) => r.id === 'taxon-falls-back-to-first');
 ok('分类规则标注了上游 PR #14950（已知在修）', !!catUp && /14950/.test(catUp.upstream ?? ''));
-ok('税规则标注为“无人跟进”', !!taxUp && (taxUp.upstream ?? null) === null);
+ok('税规则在条目里没有 upstream（即无人跟进）', !!taxUp && (taxUp.upstream ?? null) === null);
 ok('收据同时渲染“已知条目”与“上游状态”两列', /已知条目/.test(renderReceipt(losses)) && /上游状态/.test(renderReceipt(losses)));
 
 // 不装原创：每条规则都必须能指出“这已经是上游已公开的条目”

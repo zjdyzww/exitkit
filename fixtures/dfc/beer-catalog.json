@@ -1,35 +1,25 @@
 {
   "@context": "https://static.datafoodconsortium.org/ontologies/context.json",
   "@graph": [
-    {
-      "@type": "dfc-b:SuppliedProduct",
-      "@id": "https://example.org/product/biere-blanche",
-      "dfc-b:name": "Bière blanche",
-      "dfc-b:description": "Witbier 5%",
-      "dfc-b:productType": ["dfc-m:BEVERAGE", "dfc-m:ALCOHOLIC_BEVERAGE"],
-      "dfc-b:quantity": { "@type": "dfc-b:QuantitativeValue", "dfc-b:value": 1, "dfc-b:unit": "dfc-m:KILOGRAM" },
-      "dfc-b:variants": [
-        {
-          "@type": "dfc-b:SuppliedProduct",
-          "@id": "https://example.org/product/biere-blanche/bouteille",
-          "dfc-b:name": "Bouteille 33cl",
-          "dfc-b:quantity": { "@type": "dfc-b:QuantitativeValue", "dfc-b:value": 0.33, "dfc-b:unit": "dfc-m:LITRE" }
-        },
-        {
-          "@type": "dfc-b:SuppliedProduct",
-          "@id": "https://example.org/product/biere-blanche/fut",
-          "dfc-b:name": "Fût 5L",
-          "dfc-b:quantity": { "@type": "dfc-b:QuantitativeValue", "dfc-b:value": 5, "dfc-b:unit": "dfc-m:LITRE" }
-        }
-      ],
-      "dfc-b:catalogItems": [
-        {
-          "@type": "dfc-b:CatalogItem",
-          "dfc-b:offers": [
-            { "@type": "dfc-b:Offer", "dfc-b:price": { "dfc-b:value": 3.8 }, "dfc-b:taxCategory": "fr:tax-5.5" }
-          ]
-        }
-      ]
-    }
+    { "@id": "#p1", "@type": "dfc-b:SuppliedProduct", "dfc-b:name": "Bière blanche",
+      "dfc-b:hasQuantity": { "@id": "#q1" }, "dfc-b:referencedBy": { "@id": "#ci1" } },
+    { "@id": "#q1", "@type": "dfc-b:QuantitativeValue", "dfc-b:hasUnit": "dfc-m:Kilogram", "dfc-b:value": "1" },
+    { "@id": "#ci1", "@type": "dfc-b:CatalogItem", "dfc-b:offeredThrough": { "@id": "#o1" }, "dfc-b:sku": "BIO-1", "dfc-b:stockLimitation": "-1" },
+    { "@id": "#o1", "@type": "dfc-b:Offer", "dfc-b:hasPrice": { "@id": "#pr1" } },
+    { "@id": "#pr1", "@type": "dfc-b:Price", "dfc-b:VATrate": "5.5", "dfc-b:hasUnit": "dfc-m:PoundSterling", "dfc-b:value": "3.8" },
+
+    { "@id": "#v1", "@type": "dfc-b:SuppliedProduct", "dfc-b:name": "Bouteille 33cl", "dfc-b:isVariantOf": { "@id": "#p1" },
+      "dfc-b:hasQuantity": { "@id": "#q2" }, "dfc-b:referencedBy": { "@id": "#ci2" } },
+    { "@id": "#q2", "@type": "dfc-b:QuantitativeValue", "dfc-b:hasUnit": "dfc-m:Litre", "dfc-b:value": "0.33" },
+    { "@id": "#ci2", "@type": "dfc-b:CatalogItem", "dfc-b:offeredThrough": { "@id": "#o2" }, "dfc-b:sku": "BIO-1-33", "dfc-b:stockLimitation": "-1" },
+    { "@id": "#o2", "@type": "dfc-b:Offer", "dfc-b:hasPrice": { "@id": "#pr2" } },
+    { "@id": "#pr2", "@type": "dfc-b:Price", "dfc-b:VATrate": "5.5", "dfc-b:hasUnit": "dfc-m:PoundSterling", "dfc-b:value": "2.1" },
+
+    { "@id": "#v2", "@type": "dfc-b:SuppliedProduct", "dfc-b:name": "Fût 5L", "dfc-b:isVariantOf": { "@id": "#p1" },
+      "dfc-b:hasQuantity": { "@id": "#q3" }, "dfc-b:referencedBy": { "@id": "#ci3" } },
+    { "@id": "#q3", "@type": "dfc-b:QuantitativeValue", "dfc-b:hasUnit": "dfc-m:Litre", "dfc-b:value": "5" },
+    { "@id": "#ci3", "@type": "dfc-b:CatalogItem", "dfc-b:offeredThrough": { "@id": "#o3" }, "dfc-b:sku": "BIO-1-5L", "dfc-b:stockLimitation": "-1" },
+    { "@id": "#o3", "@type": "dfc-b:Offer", "dfc-b:hasPrice": { "@id": "#pr3" } },
+    { "@id": "#pr3", "@type": "dfc-b:Price", "dfc-b:VATrate": "5.5", "dfc-b:hasUnit": "dfc-m:PoundSterling", "dfc-b:value": "19.0" }
   ]
 }

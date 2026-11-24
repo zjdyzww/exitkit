@@ -57,12 +57,12 @@ export const RULES = [
     means: '分类只按单个 productType 查 dfc_id 映射；**查不到就落到该实例的第一个分类**。是否能对上取决于目标实例的 dfc_id 表，导出方无法预知',
   },
   {
-    id: 'tax-category-not-applied',
+    id: 'vat-rate-not-transferred',
     issue: '#14865（open，无 PR）',
     at: 'engines/dfc_provider/app/services/offer_builder.rb:30',
     also: 'app/models/spree/variant.rb:204-206',
-    does: 'variant.price = price(offer)   // apply() 只写 price 与 stockLimitation；读侧 tax_category = super || TaxCategory.find_by(is_default: true)',
-    means: '源里的 taxCategory 不被写入 ⇒ 读到的是**该实例的默认税分类**（不是空）。后果不是缺数据，而是静默套用错误税率',
+    does: 'variant.price = price(offer)   // apply() 只写 price.value 与 stockLimitation；Price 上的 dfc-b:VATrate 未被读取。读侧 tax_category = super || TaxCategory.find_by(is_default: true)',
+    means: 'DFC 用 **Price 上的 VATrate（税率字符串，如 "0"/"5.5"）** 表达税，OFN 用 tax category 表达税且导入不读 VATrate ⇒ 回落到该实例的默认税分类。后果不是缺数据，而是**静默套用错误税率**',
   },
 ];
 
@@ -92,24 +92,63 @@ function typeOf(node) {
 /** 从 DFC 图里取商品与其 specs。返回 { products } —— 只认有 @type 含 SuppliedProduct 的节点。 */
 export function analyzeGraph(graph) {
   const nodes = asArray(graph?.['@graph'] ?? graph?.graph ?? graph);
-  const items = nodes.filter((n) => /SuppliedProduct/i.test(typeOf(n)));
-  if (items.length === 0) {
+  if (nodes.length === 0) {
+    throw Object.assign(new Error('图中没有节点（拒绝空裁决）'), { code: 'empty_graph' });
+  }
+  // 真实 DFC 是引用图：节点之间用 @id 字符串互相指。先建索引再解析。
+  const byId = new Map();
+  for (const n of nodes) if (n?.['@id']) byId.set(n['@id'], n);
+  const deref = (v) => {
+    if (typeof v === 'string' && byId.has(v)) return byId.get(v);
+    // 真实 DFC 常把引用写成 {"@id": "_:b1096"} 对象，而不是裸字符串
+    if (v && typeof v === 'object' && !Array.isArray(v) && v['@id'] && Object.keys(v).length === 1 && byId.has(v['@id'])) {
+      return byId.get(v['@id']);
+    }
+    if (Array.isArray(v)) return v.map(deref).filter(Boolean);
+    return v;
+  };
+  const qtyOf = (node) => {
+    const q = deref(pick(node, 'hasQuantity') ?? pick(node, 'quantity'));
+    if (!q || typeof q !== 'object') return null;
+    return { value: pick(q, 'value') ?? null, unit: pick(q, 'hasUnit') ?? pick(q, 'unit') ?? null };
+  };
+
+  const supplied = nodes.filter((n) => /SuppliedProduct/i.test(typeOf(n)));
+  if (supplied.length === 0) {
     throw Object.assign(new Error('图中没有 SuppliedProduct（拒绝空裁决）'), { code: 'empty_graph' });
   }
-  const products = items.map((n) => ({
+
+  // 报价路径：SuppliedProduct.referencedBy -> CatalogItem.offeredThrough -> Offer.hasPrice -> Price
+  const priceOf = (node) => {
+    const refs = asArray(deref(pick(node, 'referencedBy')));
+    for (const ci of refs) {
+      const offers = asArray(deref(pick(ci, 'offeredThrough')));
+      for (const off of offers) {
+        const price = deref(pick(off, 'hasPrice'));
+        if (price) return { value: pick(price, 'value') ?? null, vatRate: pick(price, 'VATrate') ?? null, unit: pick(price, 'hasUnit') ?? null };
+      }
+    }
+    return null;
+  };
+
+  const products = supplied.map((n) => ({
     id: pick(n, 'id') ?? n?.['@id'] ?? null,
     name: pick(n, 'name') ?? null,
-    productType: pick(n, 'productType') ?? null,
-    quantity: pick(n, 'quantity') ?? null,
-    taxCategories: offersOf(n).map((o) => pick(o, 'taxCategory')).filter(Boolean),
-    variants: asArray(pick(n, 'variants')).map((v) => ({
+    productType: deref(pick(n, 'productType')) ?? null,
+    quantity: qtyOf(n),
+    price: priceOf(n),
+    variants: [
+      ...asArray(deref(pick(n, 'variants'))),
+      // 真实 DFC：子项通过 dfc-b:isVariantOf 指向父商品
+      ...supplied.filter((c) => asArray(deref(pick(c, 'isVariantOf'))).some((par) => (pick(par, 'id') ?? par?.['@id']) === (n?.['@id']))),
+    ].map((v) => ({
       id: pick(v, 'id') ?? v?.['@id'] ?? null,
       name: pick(v, 'name') ?? null,
-      quantity: pick(v, 'quantity') ?? null,
-      taxCategory: pick(offersOf(v)[0], 'taxCategory') ?? null,
+      quantity: qtyOf(v),
+      price: priceOf(v),
     })),
   }));
-  return { products };
+  return { products, nodeCount: nodes.length };
 }
 
 /** 按源码规则预测导入会丢什么；每条带出处，缺出处直接抛错。 */
@@ -126,7 +165,7 @@ export function predictLosses({ products }) {
     if (named.length > 0) {
       const r = cite('variant-name-overwritten');
       losses.push({
-        field: 'spec.name', scope: `product:${p.name}`, rule: r.id, at: r.at,
+        field: 'spec.name', scope: `product:${p.name}`, rule: r.id, at: r.at, issue: r.issue ?? null,
         detail: `${named.length} 个 spec 有自己的名字（${named.map((v) => v.name).join(' / ')}），导入后会变成商品名「${p.name}」`,
       });
     }
@@ -137,7 +176,7 @@ export function predictLosses({ products }) {
     if (distinct.length > 1 || (distinct.length === 1 && prodUnit && distinct[0] !== prodUnit)) {
       const r = cite('unit-taken-from-product-quantity');
       losses.push({
-        field: 'spec.unit / spec.unitScale', scope: `product:${p.name}`, rule: r.id, at: `${r.at} + ${r.also}`,
+        field: 'spec.unit / spec.unitScale', scope: `product:${p.name}`, rule: r.id, at: `${r.at} + ${r.also}`, issue: r.issue ?? null,
         detail: `spec 单位 ${distinct.join(' / ')}，商品级单位 ${prodUnit ?? '(空)'}；导入 value = quantity.value × map_unit(乘数)（KILOGRAM=1000, GRAM=1, LITRE=1, MILLILITRE=0.001），spec 自带标度不参与`,
       });
     }
@@ -153,12 +192,12 @@ export function predictLosses({ products }) {
       });
     }
     // R4：税分类不赋值
-    const anyTax = [...p.taxCategories, ...p.variants.map((v) => v.taxCategory)].filter(Boolean);
+    const anyTax = [p.price?.vatRate, ...p.variants.map((v) => v.price?.vatRate)].filter((v) => v !== null && v !== undefined && v !== '');
     if (anyTax.length > 0) {
-      const r = cite('tax-category-not-applied');
+      const r = cite('vat-rate-not-transferred');
       losses.push({
-        field: 'offer.taxCategory', scope: `product:${p.name}`, rule: r.id, at: r.at,
-        detail: `源里有税分类（${[...new Set(anyTax)].join(' / ')}），导入不写入 ⇒ 回落到实例的默认税分类（app/models/spree/variant.rb:204-206），**用错税率而不是留空**；该实例的默认值我无法从仓库得知`,
+        field: 'price.VATrate', scope: `product:${p.name}`, rule: r.id, at: r.at, issue: r.issue ?? null,
+        detail: `源 Price 带 VATrate=${[...new Set(anyTax)].join(' / ')}；导入不读它 ⇒ 回落到实例的默认税分类（app/models/spree/variant.rb:204-206），**用错税率而不是留空**；该实例的默认值我无法从仓库得知`,
       });
     }
   }
