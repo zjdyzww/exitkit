@@ -38,19 +38,21 @@
 >
 > so a variant imported from a DFC catalog does not end up with an empty tax category — it ends up with the **instance default**, which for a catalog spanning several tax rates is a silently wrong rate rather than a visible gap. That seems worse than the issue title suggests, so I wanted to check whether this is intended.
 >
-> Minimal reproduction input (DFC v1, one product, one offer carrying a tax category):
+> Minimal input, same shape as your own `spec/fixtures/files/fdc-catalog.json` (product -> CatalogItem -> Offer -> Price carrying `dfc-b:VATrate`):
 >
 > ```json
-> { "@graph": [ {
->   "@type": "dfc-b:SuppliedProduct",
->   "@id": "https://example.org/p/biere",
->   "dfc-b:name": "Bière blanche",
->   "dfc-b:productType": "dfc-m:BEVERAGE",
->   "dfc-b:quantity": { "@type": "dfc-b:QuantitativeValue", "dfc-b:value": 1, "dfc-b:unit": "dfc-m:KILOGRAM" },
->   "dfc-b:catalogItems": [ { "@type": "dfc-b:CatalogItem",
->     "dfc-b:offers": [ { "@type": "dfc-b:Offer", "dfc-b:price": { "dfc-b:value": 3.8 }, "dfc-b:taxCategory": "fr:tax-5.5" } ] } ]
-> } ] }
-> ```
+{
+  "@context": "https://static.datafoodconsortium.org/ontologies/context.json",
+  "@graph": [
+    { "@id": "#p1", "@type": "dfc-b:SuppliedProduct", "dfc-b:name": "Bière blanche",
+      "dfc-b:hasQuantity": { "@id": "#q1" }, "dfc-b:referencedBy": { "@id": "#ci1" } },
+    { "@id": "#q1", "@type": "dfc-b:QuantitativeValue", "dfc-b:hasUnit": "dfc-m:Kilogram", "dfc-b:value": "1" },
+    { "@id": "#ci1", "@type": "dfc-b:CatalogItem", "dfc-b:offeredThrough": { "@id": "#o1" }, "dfc-b:sku": "BIO-1", "dfc-b:stockLimitation": "-1" },
+    { "@id": "#o1", "@type": "dfc-b:Offer", "dfc-b:hasPrice": { "@id": "#pr1" } },
+    { "@id": "#pr1", "@type": "dfc-b:Price", "dfc-b:VATrate": "5.5", "dfc-b:hasUnit": "dfc-m:PoundSterling", "dfc-b:value": "3.8" }
+  ]
+}
+```
 >
 > Expected: imported variant's tax category == `fr:tax-5.5`. Observed by reading: no assignment on the import path, so `tax_category` resolves to the default. I have not run this against an instance — if a downstream step (fee applicator? `ProductGroupBuilder`?) does assign it, ignore me.
 >

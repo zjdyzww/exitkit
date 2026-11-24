@@ -1,16 +1,18 @@
 {
-  "@graph": [{
-    "@type": "dfc-b:SuppliedProduct",
-    "@id": "https://example.org/product/flour-kg",
-    "dfc-b:name": "Farine T65",
-    "dfc-b:productType": "dfc-m:CEREAL",
-    "dfc-b:quantity": { "@type": "dfc-b:QuantitativeValue", "dfc-b:value": 1, "dfc-b:unit": "dfc-m:KILOGRAM" },
-    "dfc-b:variants": [{
-      "@type": "dfc-b:SuppliedProduct",
-      "@id": "https://example.org/product/flour-kg/sachet",
-      "dfc-b:name": "Farine T65",
-      "dfc-b:quantity": { "@type": "dfc-b:QuantitativeValue", "dfc-b:value": 1000, "dfc-b:unit": "dfc-m:GRAM" }
-    }],
-    "dfc-b:catalogItems": [{ "@type": "dfc-b:CatalogItem", "dfc-b:offers": [{ "@type": "dfc-b:Offer", "dfc-b:price": { "dfc-b:value": 2.1 } }] }]
-  }]
+  "@context": "https://static.datafoodconsortium.org/ontologies/context.json",
+  "@graph": [
+    { "@id": "#p1", "@type": "dfc-b:SuppliedProduct", "dfc-b:name": "Farine T65",
+      "dfc-b:hasQuantity": { "@id": "#q1" }, "dfc-b:referencedBy": { "@id": "#ci1" } },
+    { "@id": "#q1", "@type": "dfc-b:QuantitativeValue", "dfc-b:hasUnit": "dfc-m:Kilogram", "dfc-b:value": "1" },
+    { "@id": "#ci1", "@type": "dfc-b:CatalogItem", "dfc-b:offeredThrough": { "@id": "#o1" }, "dfc-b:sku": "FAR-1", "dfc-b:stockLimitation": "-1" },
+    { "@id": "#o1", "@type": "dfc-b:Offer", "dfc-b:hasPrice": { "@id": "#pr1" } },
+    { "@id": "#pr1", "@type": "dfc-b:Price", "dfc-b:VATrate": "5.5", "dfc-b:hasUnit": "dfc-m:PoundSterling", "dfc-b:value": "2.1" },
+
+    { "@id": "#v1", "@type": "dfc-b:SuppliedProduct", "dfc-b:name": "Farine T65", "dfc-b:isVariantOf": { "@id": "#p1" },
+      "dfc-b:hasQuantity": { "@id": "#q2" }, "dfc-b:referencedBy": { "@id": "#ci2" } },
+    { "@id": "#q2", "@type": "dfc-b:QuantitativeValue", "dfc-b:hasUnit": "dfc-m:Gram", "dfc-b:value": "1000" },
+    { "@id": "#ci2", "@type": "dfc-b:CatalogItem", "dfc-b:offeredThrough": { "@id": "#o2" }, "dfc-b:sku": "FAR-1-1KG", "dfc-b:stockLimitation": "-1" },
+    { "@id": "#o2", "@type": "dfc-b:Offer", "dfc-b:hasPrice": { "@id": "#pr2" } },
+    { "@id": "#pr2", "@type": "dfc-b:Price", "dfc-b:VATrate": "5.5", "dfc-b:hasUnit": "dfc-m:PoundSterling", "dfc-b:value": "2.1" }
+  ]
 }

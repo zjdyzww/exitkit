@@ -32,6 +32,23 @@ const ok = (label, cond, extra = '') => {
   else { console.log(`  FAIL ${label}${extra ? ` — ${extra}` : ''}`); failures += 1; }
 };
 
+// 防我再编造键名：我这几个夹具里用到的所有 dfc-b: 键，必须出现在他们真实夹具的词汇表里
+const vocab = JSON.parse(readFileSync(join(here, '..', 'fixtures', 'dfc', 'real-vocabulary.json'), 'utf8'));
+const usedKeys = new Set();
+for (const f of ['beer-catalog.json', 'gram-vs-kilogram.json', 'minimal-vat.json']) {
+  const g = JSON.parse(readFileSync(join(here, '..', 'fixtures', 'dfc', f), 'utf8'));
+  for (const n of g['@graph']) for (const k of Object.keys(n)) if (k.startsWith('dfc-')) usedKeys.add(k);
+}
+const allowed = new Set([...vocab.verified_in_fixture, ...(vocab.referenced_in_code ?? []).map((x) => x.key)]);
+const invented = [...usedKeys].filter((k) => !allowed.has(k));
+ok('夹具只用他们真实词汇表里的键（不编造字段）', invented.length === 0, invented.join(', ') || 'all ok');
+
+// 待发稿里嵌入的最小片段：必须是真实形状、只产生 VAT 一条预测、且能嵌进 issue
+const minimal = JSON.parse(readFileSync(join(here, '..', 'fixtures', 'dfc', 'minimal-vat.json'), 'utf8'));
+const minLosses = predictLosses(analyzeGraph(minimal));
+ok('最小复现片段 ⇒ 恰好 1 条预测（VAT）', minLosses.length === 1 && minLosses[0].rule === 'vat-rate-not-transferred');
+ok('最小片段足够小、可直接贴进 issue（≤5 节点）', minimal['@graph'].length <= 5, `${minimal['@graph'].length} 节点`);
+
 // 先验规则表自身（在任何计算之前，坏了要立刻可见）
 ok('规则表本身每条都有可机械校验的出处', RULES.every((r) => /\.rb:\d+/.test(r.at)), RULES.filter((r) => !/\.rb:\d+/.test(r.at)).map((r) => r.id).join(',') || 'all ok');
 

@@ -1,0 +1,51 @@
+{
+  "$comment": "Key vocabulary extracted from openfoodfoundation/openfoodnetwork spec/fixtures/files/fdc-catalog.json at commit e13ef4d7fdc85d6f165638f574cec1492437750d. Only key names are stored (not the file itself) so this repo stays MIT and we avoid copying AGPL test data. Two tiers: verified_in_fixture (appears in the real fixture) and referenced_in_code (appears in OFN source with a citation). A key I use must be in at least one of them.",
+  "source": "openfoodfoundation/openfoodnetwork@e13ef4d7fdc85d6f165638f574cec1492437750d:spec/fixtures/files/fdc-catalog.json",
+  "nodes": 57,
+  "counts": {
+    "dfc-b:hasUnit": 24,
+    "dfc-b:value": 24,
+    "dfc-b:VATrate": 8,
+    "dfc-b:description": 8,
+    "dfc-b:hasQuantity": 14,
+    "dfc-b:image": 8,
+    "dfc-b:name": 8,
+    "dfc-b:referencedBy": 8,
+    "dfc-b:consumes": 3,
+    "dfc-b:produces": 3,
+    "dfc-b:hasIncome": 3,
+    "dfc-b:hasOutcome": 3,
+    "dfc-b:offeredThrough": 8,
+    "dfc-b:sku": 8,
+    "dfc-b:stockLimitation": 8,
+    "dfc-b:hasPrice": 8
+  },
+  "verified_in_fixture": [
+    "dfc-b:VATrate",
+    "dfc-b:consumes",
+    "dfc-b:description",
+    "dfc-b:hasIncome",
+    "dfc-b:hasOutcome",
+    "dfc-b:hasPrice",
+    "dfc-b:hasQuantity",
+    "dfc-b:hasUnit",
+    "dfc-b:image",
+    "dfc-b:name",
+    "dfc-b:offeredThrough",
+    "dfc-b:produces",
+    "dfc-b:referencedBy",
+    "dfc-b:sku",
+    "dfc-b:stockLimitation",
+    "dfc-b:value"
+  ],
+  "referenced_in_code": [
+    {
+      "key": "dfc-b:isVariantOf",
+      "at": "engines/dfc_provider/app/services/supplied_product_importer.rb:47"
+    },
+    {
+      "key": "dfc-b:productType",
+      "at": "engines/dfc_provider/app/services/supplied_product_importer.rb:118"
+    }
+  ]
+}

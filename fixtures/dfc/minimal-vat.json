@@ -1,0 +1,11 @@
+{
+  "@context": "https://static.datafoodconsortium.org/ontologies/context.json",
+  "@graph": [
+    { "@id": "#p1", "@type": "dfc-b:SuppliedProduct", "dfc-b:name": "Bière blanche",
+      "dfc-b:hasQuantity": { "@id": "#q1" }, "dfc-b:referencedBy": { "@id": "#ci1" } },
+    { "@id": "#q1", "@type": "dfc-b:QuantitativeValue", "dfc-b:hasUnit": "dfc-m:Kilogram", "dfc-b:value": "1" },
+    { "@id": "#ci1", "@type": "dfc-b:CatalogItem", "dfc-b:offeredThrough": { "@id": "#o1" }, "dfc-b:sku": "BIO-1", "dfc-b:stockLimitation": "-1" },
+    { "@id": "#o1", "@type": "dfc-b:Offer", "dfc-b:hasPrice": { "@id": "#pr1" } },
+    { "@id": "#pr1", "@type": "dfc-b:Price", "dfc-b:VATrate": "5.5", "dfc-b:hasUnit": "dfc-m:PoundSterling", "dfc-b:value": "3.8" }
+  ]
+}
