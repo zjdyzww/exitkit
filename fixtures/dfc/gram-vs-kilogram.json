@@ -1,0 +1,16 @@
+{
+  "@graph": [{
+    "@type": "dfc-b:SuppliedProduct",
+    "@id": "https://example.org/product/flour-kg",
+    "dfc-b:name": "Farine T65",
+    "dfc-b:productType": "dfc-m:CEREAL",
+    "dfc-b:quantity": { "@type": "dfc-b:QuantitativeValue", "dfc-b:value": 1, "dfc-b:unit": "dfc-m:KILOGRAM" },
+    "dfc-b:variants": [{
+      "@type": "dfc-b:SuppliedProduct",
+      "@id": "https://example.org/product/flour-kg/sachet",
+      "dfc-b:name": "Farine T65",
+      "dfc-b:quantity": { "@type": "dfc-b:QuantitativeValue", "dfc-b:value": 1000, "dfc-b:unit": "dfc-m:GRAM" }
+    }],
+    "dfc-b:catalogItems": [{ "@type": "dfc-b:CatalogItem", "dfc-b:offers": [{ "@type": "dfc-b:Offer", "dfc-b:price": { "dfc-b:value": 2.1 } }] }]
+  }]
+}

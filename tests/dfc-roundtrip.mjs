@@ -49,6 +49,14 @@ const receipt = renderReceipt(losses);
 ok('收据写明"按源码预测，不是实测"', /按源码预测，不是实测/.test(receipt) && /未在真实 OFN 实例上执行/.test(receipt));
 ok('收据含"核不了"段（不得隐瞒未验部分）', /核不了（必须你在真实实例上验）/.test(receipt));
 
+// 方向一(b)：同一物理量的两种写法（1 KILOGRAM vs 1000 GRAM）必须都被识别为“标度会变”，且带精确乘数
+const kg = JSON.parse(readFileSync(join(here, '..', 'fixtures', 'dfc', 'gram-vs-kilogram.json'), 'utf8'));
+const kgLosses = predictLosses(analyzeGraph(kg));
+const unitLoss = kgLosses.find((l) => /unitScale/.test(l.field));
+ok('kg/gram 两种写法都触发标度丢失', !!unitLoss);
+ok('预测里带 map_unit 的精确乘数（KILOGRAM=1000, GRAM=1）', !!unitLoss && /KILOGRAM=1000/.test(unitLoss.detail) && /GRAM=1/.test(unitLoss.detail));
+ok('出处具体到 map_unit 行号（:99-102）', !!unitLoss && /quantitative_value_builder\.rb:32,99-102/.test(unitLoss.at));
+
 // 方向二：干净语料 ⇒ 必须沉默（防止"永远报警"的假预测器）
 const clean = {
   '@graph': [{

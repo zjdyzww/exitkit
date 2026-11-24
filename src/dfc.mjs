@@ -42,9 +42,9 @@ export const RULES = [
   {
     id: 'unit-taken-from-product-quantity',
     at: 'engines/dfc_provider/app/services/supplied_product_importer.rb:119',
-    also: 'engines/dfc_provider/app/services/quantitative_value_builder.rb:32',
-    does: 'QuantitativeValueBuilder.apply(supplied_product.quantity, variant); value = quantity.value * unit_scale',
-    means: '规格单位取自**商品级 quantity** 再乘一个单位标度；spec 级单位/标度不参与 ⇒ kg↔g 这类标度会变',
+    also: 'engines/dfc_provider/app/services/quantitative_value_builder.rb:32,99-102',
+    does: 'QuantitativeValueBuilder.apply(supplied_product.quantity, variant); value = quantity.value * unit_scale；map_unit: KILOGRAM→1000, GRAM→1, LITRE→1, MILLILITRE→0.001',
+    means: '规格单位取自**商品级 quantity** 再乘 map_unit 的乘数 ⇒ 同一个物理量写成 `1 KILOGRAM` 与 `1000 GRAM`，导入后 variant_unit_scale 会是 1000 与 1（#14862 的“标度被改变”）',
   },
   {
     id: 'single-taxon-only',
@@ -132,7 +132,7 @@ export function predictLosses({ products }) {
       const r = cite('unit-taken-from-product-quantity');
       losses.push({
         field: 'spec.unit / spec.unitScale', scope: `product:${p.name}`, rule: r.id, at: `${r.at} + ${r.also}`,
-        detail: `spec 单位 ${distinct.join(' / ')}，商品级单位 ${prodUnit ?? '(空)'}；导入按商品级 quantity × unit_scale 折算，spec 标度会变`,
+        detail: `spec 单位 ${distinct.join(' / ')}，商品级单位 ${prodUnit ?? '(空)'}；导入 value = quantity.value × map_unit(乘数)（KILOGRAM=1000, GRAM=1, LITRE=1, MILLILITRE=0.001），spec 自带标度不参与`,
       });
     }
     // R3：多分类只留一个
