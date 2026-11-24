@@ -3,10 +3,33 @@
   "version": "0.1.0",
   "description": "Turn a platform's official export into a verifiable migration receipt: what you can take, what you lose, and what the export cannot tell you.",
   "type": "module",
-  "bin": { "exitkit": "src/exitkit.mjs" },
-  "scripts": { "test": "node src/exitkit.mjs --self-test" },
-  "keywords": ["data-portability", "migration", "receipt", "manifest", "notion", "export"],
+  "bin": {
+    "exitkit": "src/exitkit.mjs"
+  },
+  "scripts": {
+    "test": "node src/exitkit.mjs --self-test && node deliver.mjs --self-test 2>/dev/null; node tests/dfc-roundtrip.mjs && node tools/verify-citations.mjs --self-test",
+    "citations": "node tools/verify-citations.mjs"
+  },
+  "keywords": [
+    "data-portability",
+    "migration",
+    "receipt",
+    "manifest",
+    "notion",
+    "export"
+  ],
   "license": "MIT",
-  "engines": { "node": ">=20" },
-  "files": ["src/exitkit.mjs", "README.md", "PHASE0-selection.md"]
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "PHASE0-selection.md",
+    "README.md",
+    "docs",
+    "fixtures/dfc",
+    "src/dfc.mjs",
+    "src/exitkit.mjs",
+    "tests",
+    "tools/verify-citations.mjs"
+  ]
 }
