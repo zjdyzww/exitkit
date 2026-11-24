@@ -55,8 +55,9 @@ export const RULES = [
   {
     id: 'tax-category-not-applied',
     at: 'engines/dfc_provider/app/services/offer_builder.rb:30',
-    does: 'variant.price = price(offer)   // apply() 只写 price 与 stockLimitation',
-    means: 'Offer 上的税分类没有被赋给 variant ⇒ 税分类在导入后为空',
+    also: 'app/models/spree/variant.rb:204-206',
+    does: 'variant.price = price(offer)   // apply() 只写 price 与 stockLimitation；读侧 tax_category = super || TaxCategory.find_by(is_default: true)',
+    means: '源里的 taxCategory 不被写入 ⇒ 读到的是**该实例的默认税分类**（不是空）。后果不是缺数据，而是静默套用错误税率',
   },
 ];
 
@@ -150,7 +151,7 @@ export function predictLosses({ products }) {
       const r = cite('tax-category-not-applied');
       losses.push({
         field: 'offer.taxCategory', scope: `product:${p.name}`, rule: r.id, at: r.at,
-        detail: `源里有税分类（${[...new Set(anyTax)].join(' / ')}），导入后为空（apply 只写 price 与 stock）`,
+        detail: `源里有税分类（${[...new Set(anyTax)].join(' / ')}），导入不写入 ⇒ 回落到实例的默认税分类（app/models/spree/variant.rb:204-206），**用错税率而不是留空**；该实例的默认值我无法从仓库得知`,
       });
     }
   }

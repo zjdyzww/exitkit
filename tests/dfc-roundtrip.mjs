@@ -49,6 +49,11 @@ const receipt = renderReceipt(losses);
 ok('收据写明"按源码预测，不是实测"', /按源码预测，不是实测/.test(receipt) && /未在真实 OFN 实例上执行/.test(receipt));
 ok('收据含"核不了"段（不得隐瞒未验部分）', /核不了（必须你在真实实例上验）/.test(receipt));
 
+// 税的后果必须说准：不是“为空”，而是回落到实例默认税（否则这个断言会把“错税率”说成“缺数据”）
+const taxLoss = losses.find((l) => /taxCategory/.test(l.field));
+ok('税丢失被描述为“回落到默认税分类”而非“为空”', !!taxLoss && /默认税分类/.test(taxLoss.detail) && !/导入后为空/.test(taxLoss.detail));
+ok('税的回落逻辑有出处（variant.rb:204-206）', !!taxLoss && /variant\.rb:204-206/.test(taxLoss.detail + taxLoss.at));
+
 // 方向一(b)：同一物理量的两种写法（1 KILOGRAM vs 1000 GRAM）必须都被识别为“标度会变”，且带精确乘数
 const kg = JSON.parse(readFileSync(join(here, '..', 'fixtures', 'dfc', 'gram-vs-kilogram.json'), 'utf8'));
 const kgLosses = predictLosses(analyzeGraph(kg));
