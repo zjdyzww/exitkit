@@ -47,10 +47,10 @@ export const RULES = [
     means: '规格单位取自**商品级 quantity** 再乘 map_unit 的乘数 ⇒ 同一个物理量写成 `1 KILOGRAM` 与 `1000 GRAM`，导入后 variant_unit_scale 会是 1000 与 1（#14862 的“标度被改变”）',
   },
   {
-    id: 'single-taxon-only',
-    at: 'engines/dfc_provider/app/services/supplied_product_importer.rb:118',
-    does: 'variant.primary_taxon = taxon(supplied_product)',
-    means: '只落**一个**分类（primary_taxon）；商品若挂多个分类，其余全部丢失',
+    id: 'taxon-falls-back-to-first',
+    at: 'engines/dfc_provider/app/services/product_type_importer.rb:19',
+    does: 'taxons.first || Spree::Taxon.first   // 源码注释自述：“If we don’t find any matching taxon, we return a random one”',
+    means: '分类只按单个 productType 查 dfc_id 映射；**查不到就落到该实例的第一个分类**。是否能对上取决于目标实例的 dfc_id 表，导出方无法预知',
   },
   {
     id: 'tax-category-not-applied',
@@ -136,13 +136,13 @@ export function predictLosses({ products }) {
         detail: `spec 单位 ${distinct.join(' / ')}，商品级单位 ${prodUnit ?? '(空)'}；导入 value = quantity.value × map_unit(乘数)（KILOGRAM=1000, GRAM=1, LITRE=1, MILLILITRE=0.001），spec 自带标度不参与`,
       });
     }
-    // R3：多分类只留一个
-    const cats = [...new Set([...(p.categories ?? []), ...asArray(p.productType).filter(Boolean)].map(String))];
-    if (cats.length > 1) {
-      const r = cite('single-taxon-only');
+    // R3：分类映射失败会落到“第一个分类”（不是“多分类被截断”）
+    const types = asArray(p.productType).filter(Boolean).map(String);
+    if (types.length > 0) {
+      const r = cite('taxon-falls-back-to-first');
       losses.push({
         field: 'product.categories[]', scope: `product:${p.name}`, rule: r.id, at: r.at,
-        detail: `${cats.length} 个分类（${cats.join(' / ')}）只会落下 primary_taxon 一个，其余丢失`,
+        detail: `源 productType=${types.join(' / ')}；只按单个类型查 dfc_id 映射，**查不到就落到目标实例的第一个分类**（源码注释自述 random）。映射是否存在我无法从仓库判断`,
       });
     }
     // R4：税分类不赋值

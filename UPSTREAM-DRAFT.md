@@ -44,7 +44,7 @@
 >
 > Expected: imported variant's tax category == `fr:tax-5.5`. Observed by reading: no assignment on the import path, so `tax_category` resolves to the default. I have not run this against an instance — if a downstream step (fee applicator? `ProductGroupBuilder`?) does assign it, ignore me.
 >
-> Related, same function: `variant.display_name = supplied_product.name` (`:117`), `QuantitativeValueBuilder.apply(supplied_product.quantity, variant)` using the **product-level** quantity (`:119`, multipliers at `quantitative_value_builder.rb:99-102`), and `variant.primary_taxon = taxon(...)` (`:118`) keeping a single taxon. Those look like the same family as #14861/#14862/#14864.
+> Related, same function: `variant.display_name = supplied_product.name` (`:117`), `QuantitativeValueBuilder.apply(supplied_product.quantity, variant)` using the **product-level** quantity (`:119`, multipliers at `quantitative_value_builder.rb:99-102`), and the taxon lookup: `ProductTypeImporter.taxon` ends with `taxons.first || Spree::Taxon.first` (`product_type_importer.rb:19`) — their own comment says "If we don't find any matching taxon, we return a random one". So a catalog whose product type has no `dfc_id` in the target instance is filed under the **first** category rather than left unclassified. Those look like the same family as #14861/#14862/#14864.
 
 ## 若被回应"有用/可复现"
 

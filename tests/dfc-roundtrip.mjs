@@ -43,6 +43,7 @@ const rules = new Set(losses.map((l) => l.rule));
 
 ok('多规格语料 ⇒ 预测 ≥4 条字段级丢失', losses.length >= 4, `${losses.length} 条`);
 ok('覆盖 4 条源码规则', rules.size === 4, [...rules].join(', '));
+ok('分类规则是“落到第一个分类”而非“多分类被截断”', losses.some((l) => /第一个分类/.test(l.detail)) && !losses.some((l) => /其余丢失/.test(l.detail)));
 ok('每条预测都带合法出处（file.rb:NN）', losses.every((l) => /\.rb:\d+/.test(l.at)), losses.filter((l) => !/\.rb:\d+/.test(l.at)).map((l) => l.rule).join(',') || 'all ok');
 ok('出处固定到 commit', /^[0-9a-f]{40}$/.test(OFN_COMMIT), OFN_COMMIT.slice(0, 8));
 const receipt = renderReceipt(losses);
@@ -77,7 +78,10 @@ const clean = {
   }],
 };
 const cleanLosses = predictLosses(analyzeGraph(clean));
-ok('干净语料 ⇒ 0 条预测（不误报）', cleanLosses.length === 0, `${cleanLosses.length} 条`);
+// 干净语料：三条确定性丢失（名/单位/税）都不得触发；分类映射风险**无条件存在**（导出方看不出目标实例有没有该 dfc_id），
+// 所以正确的期望是“只剩那一条，且必须是分类映射”，而不是“一条都没有”。
+ok('干净语料 ⇒ 无确定性丢失，只余分类映射风险', cleanLosses.length === 1 && cleanLosses[0].rule === 'taxon-falls-back-to-first', `${cleanLosses.length} 条：${cleanLosses.map((l) => l.rule).join(',') || 'none'}`);
+ok('干净语料不触发 名/单位/税 三条', !cleanLosses.some((l) => ['variant-name-overwritten', 'unit-taken-from-product-quantity', 'tax-category-not-applied'].includes(l.rule)));
 
 // 负例：空图必须拒绝裁决
 let code = null;
