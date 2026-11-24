@@ -20,6 +20,7 @@
 // @rule no_silent_loss P0 — 任何未被 canonical 表达的文件或构造，必须出现在 losses；解析器不得静默跳过未知文件类型
 // @rule fail_loud_on_drift P0 — 结构不符合预期（导出包为空、0 字节文件、CSV 全空）⇒ 非零退出并点名，绝不产出"成功"的空收据
 // @rule receipt_three_parts P0 — receipt.md 必须同时含"能带走/会丢/核不了"三段；缺任一段即视为不合格产物
+// @rule losses_are_aggregated P1 — 丢失必须**按构造汇总**（count + 少量样例）后再进收据/统计：真实归档实测 41,623 文件会产生 3.8 万条逐条记录，逐条枚举等于没有信息
 // @rule unverifiable_is_declared P0 — 导出包无法证明的丢失，必须写成"需自查"条目，不得省略、不得写成已核实
 // @rule deterministic P1 — 同一输入两次运行，manifest.json 除 generatedAt 外逐字节相同；--report 重出的 receipt 必须与首次写入内容一致
 // @rule risk_is_not_loss P1 — 超长路径等“风险”进 losses 的 risk 分类，不得写成已丢失，也不得静默忽略
@@ -33,7 +34,7 @@
 //
 // @error missing_unzip — 需要解压但系统无 unzip ⇒ exit 3，提示手工解压后以目录传入
 // @error empty_export — 导出包无任何文件 ⇒ exit 2（拒绝真空通过）
-// @error zero_byte_file — 导出包内存在 0 字节文件 ⇒ exit 2，点名（多半是导出未完成）
+// @error all_files_zero_byte — 导出包内**所有**文件均为 0 字节 ⇒ exit 2（真正的坏导出；个别 0 字节文件是正常现象，如 .gitkeep/.nojekyll/空 __init__.py，只做风险汇总）
 // @error verify_mismatch — 哈希不符/文件缺失/多余文件 ⇒ exit 1，逐条点名
 // @error missing_manifest — --report 时找不到 manifest.json ⇒ exit 2，不产出空收据
 //
@@ -173,9 +174,12 @@ export function buildExport({ from, out, dryRun = false, version = VERSION }) {
     const files = walk(src.root);
     if (files.length === 0) throw Object.assign(new Error('导出包里没有任何文件'), { code: 'empty_export' });
 
+    // 真实数据教训（2026-11-24，45503 文件的真实归档）：零字节文件是**正常**的
+    //（.gitkeep/.nojekyll/空 __init__.py/空 fixture），把它当"导出未完成"会误杀真实导出包。
+    // 只有"全部为零字节"才说明导出真的坏了；个别零字节降级为风险汇总。
     const zeroByte = files.filter((f) => statSync(f.abs).size === 0);
-    if (zeroByte.length > 0) {
-      throw Object.assign(new Error(`存在 0 字节文件（多半导出未完成）：${zeroByte.map((f) => f.rel).join(', ')}`), { code: 'zero_byte_file' });
+    if (zeroByte.length === files.length) {
+      throw Object.assign(new Error(`导出包内 ${files.length} 个文件全为 0 字节 ⇒ 导出失败`), { code: 'all_files_zero_byte' });
     }
 
     const sourceSha = createHash('sha256');
@@ -196,6 +200,14 @@ export function buildExport({ from, out, dryRun = false, version = VERSION }) {
         losses.push(...r.losses);
         if (r.headerless) throw Object.assign(new Error(`CSV 首行不像表头：${f.rel}`), { code: 'csv_without_header' });
       }
+    }
+
+    if (zeroByte.length > 0) {
+      losses.push({
+        construct: 'risk: zero-byte files',
+        evidence: zeroByte.slice(0, 5).map((f) => f.rel).join(' · '),
+        note: `${zeroByte.length}/${files.length} 个文件为空（占位文件属正常；若整包大多为空才说明导出失败）`,
+      });
     }
 
     const byBase = new Map();
@@ -240,6 +252,7 @@ export function buildExport({ from, out, dryRun = false, version = VERSION }) {
         files_total: entries.length,
         by_kind: entries.reduce((acc, e) => ((acc[e.kind] = (acc[e.kind] ?? 0) + 1), acc), {}),
         losses_detected: losses.length,
+        losses_by_construct: aggregateLosses(losses).map((x) => ({ construct: x.construct, count: x.count })),
         unverifiable_declared: declaredUnverifiable().length,
       },
     };
@@ -253,7 +266,7 @@ export function buildExport({ from, out, dryRun = false, version = VERSION }) {
       copyFileSync(f.abs, dest);
     }
     writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
-    writeFileSync(join(out, 'losses.json'), JSON.stringify({ detected: losses, unverifiable: declaredUnverifiable() }, null, 2) + '\n', 'utf8');
+    writeFileSync(join(out, 'losses.json'), JSON.stringify({ detected: losses, byConstruct: aggregateLosses(losses), unverifiable: declaredUnverifiable() }, null, 2) + '\n', 'utf8');
     writeFileSync(join(out, 'receipt.md'), renderReceipt(manifest), 'utf8');
     return { manifest, losses, unverifiable: declaredUnverifiable(), dryRun: false };
   } finally {
@@ -264,6 +277,18 @@ export function buildExport({ from, out, dryRun = false, version = VERSION }) {
 /* ------------------------------------------------------------------ */
 /* 收据（人读）                                                        */
 /* ------------------------------------------------------------------ */
+
+/** 按构造把逐条丢失压成 {construct, count, examples, note} 列表（真实规模下逐条枚举不可读）。 */
+export function aggregateLosses(losses, maxExamples = 3) {
+  const map = new Map();
+  for (const l of losses) {
+    const cur = map.get(l.construct) ?? { construct: l.construct, count: 0, examples: [], note: l.note };
+    cur.count += 1;
+    if (cur.examples.length < maxExamples && l.evidence && !cur.examples.includes(l.evidence)) cur.examples.push(l.evidence);
+    map.set(l.construct, cur);
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count);
+}
 
 export function renderReceipt(manifest) {
   const m = manifest;
@@ -282,8 +307,12 @@ export function renderReceipt(manifest) {
     '',
     '## 二、你会丢什么（从导出包里检出的，带证据）',
     '',
-    `检出 **${m.stats.losses_detected}** 条，逐条证据见 \`losses.json\` 的 \`detected\`。`,
-    '常见三类：指向导出包之外页面的关系链接、无 Markdown 等价物的内嵌 HTML 块、未映射的文件类型。',
+    `检出 **${m.stats.losses_detected}** 条，按构造汇总如下（逐条证据见 \`losses.json\`）：`,
+    '',
+    '| 构造 | 条数 |',
+    '|---|---|',
+    ...(m.stats.losses_by_construct ?? []).slice(0, 12).map((x) => `| ${x.construct} | ${x.count} |`),
+    '',
     '',
     '## 三、我核不了什么（导出包本身不证明，必须你自查）',
     '',
@@ -417,6 +446,16 @@ function selfTest() {
     const ures = buildExport({ from: usrc, out: join(base, 'out-url') });
     ok('链接含 URL 编码 ⇒ risk', ures.losses.some((l) => /url-encoded/.test(l.construct)));
 
+    // 真实规模教训：丢失必须按构造汇总（41,623 文件的真实归档产生 3.8 万条逐条记录）
+    const asrc = join(base, 'many');
+    ensureDir(asrc);
+    for (let i = 0; i < 40; i += 1) writeFileSync(join(asrc, `f${i}.xyz`), 'x', 'utf8');
+    writeFileSync(join(asrc, 'a.md'), '# ok', 'utf8');
+    const ares = buildExport({ from: asrc, out: join(base, 'out-many') });
+    const agg = aggregateLosses(ares.losses);
+    const otherRow = agg.find((x) => /file type not migrated/.test(x.construct));
+    ok('丢失按构造汇总（40 个同类文件 ⇒ 1 行、count=40）', otherRow && otherRow.count === 40 && agg.length < 5);
+
     // --report 幂等：重出的收据内容必须与首次一致
     const rep = report(rout);
     ok('--report 重出收据幂等（内容不变）', rep.changed === false);
@@ -425,13 +464,20 @@ function selfTest() {
     try { report(join(base, 'no-such-out')); } catch (e) { code3 = e.code; }
     ok('负例 缺 manifest ⇒ missing_manifest', code3 === 'missing_manifest');
 
-    // 负例 4：0 字节文件 → 必须红
+    // 负例 4：**全部** 0 字节 → 必须红（真实归档里个别 0 字节是正常的，见 zero-byte 风险）
     const zsrc = join(base, 'zero');
     ensureDir(zsrc);
     writeFileSync(join(zsrc, 'a.md'), '', 'utf8');
     let code2 = null;
     try { buildExport({ from: zsrc, out: join(base, 'out3') }); } catch (e) { code2 = e.code; }
-    ok('负例 0 字节文件 ⇒ zero_byte_file', code2 === 'zero_byte_file');
+    ok('负例 全部 0 字节 ⇒ all_files_zero_byte', code2 === 'all_files_zero_byte');
+    // 正例：个别 0 字节 + 有内容文件 ⇒ 不失败，但要进 risk
+    const msrc = join(base, 'mixed-zero');
+    ensureDir(msrc);
+    writeFileSync(join(msrc, 'a.md'), '# hi', 'utf8');
+    writeFileSync(join(msrc, '.gitkeep'), '', 'utf8');
+    const mres = buildExport({ from: msrc, out: join(base, 'out-mixed') });
+    ok('个别 0 字节不失败且进 risk（真实归档教训）', mres.manifest.files.length === 2 && mres.losses.some((l) => /zero-byte files/.test(l.construct)));
   } finally {
     rmSync(base, { recursive: true, force: true });
   }

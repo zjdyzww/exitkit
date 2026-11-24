@@ -84,3 +84,16 @@ node src/exitkit.mjs --self-test     # 10 例，全部离线
 ## 许可
 
 MIT。拿去用、拿去改、拿去批评。
+
+## Real data changed two rules (2026-11-24)
+
+I could not get a real platform export, so I ran the tool against a **real archive I do have**: a 45,503-file git archive (410 MB) with 242 Chinese filenames and 1,702 duplicate basenames.
+
+| 我原来的规则 | 真实数据怎么说 | 现在 |
+|---|---|---|
+| 任何 0 字节文件 ⇒ 判"导出未完成"、直接失败 | 真实归档里有 35 个合法的 0 字节文件：`.gitkeep`、`.nojekyll`、空的 `__init__.py`、空 fixture | 只有**全部**文件为 0 字节才算坏导出；个别 0 字节降级为风险汇总 |
+| 每条丢失各占一行 | 41,623 个文件产生 **37,899** 条逐条记录 —— 这是噪音，不是信息 | **按构造汇总**（count + 少量样例），收据里是表格 |
+
+两次都是真实数据先打我的脸，然后才改对。自检 17 → 19 例，两条新断言都注入验证过会红。
+
+**这仍然不等于"验证过真实平台导出"**：它验证的是机制在真实规模与真实脏数据下的行为。平台特有的怪癖（页 ID 后缀、`%XX` 链接）仍是外部来源描述，标 UNVERIFIED。
