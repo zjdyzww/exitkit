@@ -23,7 +23,8 @@
 // @rule unverifiable_is_declared P0 — 导出包无法证明的丢失，必须写成"需自查"条目，不得省略、不得写成已核实
 // @rule deterministic P1 — 同一输入两次运行，manifest.json 除 generatedAt 外逐字节相同；--report 重出的 receipt 必须与首次写入内容一致
 // @rule risk_is_not_loss P1 — 超长路径等“风险”进 losses 的 risk 分类，不得写成已丢失，也不得静默忽略
-// @rule suffix_duplicate_detected P1 — 平台给重名页加后缀（`-1`/` 1a2b3c`）时文件名并不相等；只查完全相同会漏掉，必须按“去后缀后同基名”再查一次
+// @rule id_suffix_is_universal P1 — 据三处独立来源：平台给**几乎每个**导出的页文件/目录追加 `<Title> <32hex>` 页 ID（非仅重名）；因此
+//   (a) 必须识别并汇总计数，不得逐文件刷屏当风险；(b) 必须提示“改名要同步重写链接，否则断链”；(c) “真重名”只能在**剥掉 ID 后缀之后**仍撞名时才报
 // @rule url_encoded_link_is_risk P1 — md 链接里出现 %XX 编码路径时必须报 risk（导入后链接会指向不存在的转义名）
 //
 // @depends node >= 20；系统 `unzip`（仅 --from *.zip 时需要）
@@ -205,17 +206,29 @@ export function buildExport({ from, out, dryRun = false, version = VERSION }) {
     for (const [b, n] of byBase) {
       if (n > 1) losses.push({ construct: 'risk: duplicate filename', evidence: b, note: `${n} 个文件同名（不同目录）；导入扁平化的替代品时会互相覆盖` });
     }
-    // 平台给重名页加后缀（`-1` 或 ` 1a2b3c`），文件名因此不相等 —— 只查完全相同会漏
-    const stemOf = (b) => b.replace(/\.(md|csv|markdown)$/i, '').replace(/(?:[- ]\d+|[ ][0-9a-f]{6,32})$/i, '');
-    const byStem = new Map();
+    // 据三处独立来源：页 ID 后缀是**普遍**的（`<Title> <32hex>.md`），不是重名专用。
+    // 所以：① 汇总计数并提示「改名要同步重写链接」；② 真重名只在剥掉 ID 后仍撞名时才报。
+    const ID_SUFFIX = / ?[0-9a-f]{32}$/i;
+    const idSuffixed = entries.filter((e) => ID_SUFFIX.test(e.path.split('/').pop().replace(/\.(md|csv|markdown)$/i, '')));
+    if (idSuffixed.length > 0) {
+      losses.push({
+        construct: 'risk: page-id suffix on filenames',
+        evidence: idSuffixed[0].path,
+        note: `${idSuffixed.length}/${entries.length} 个文件带 32 位页 ID 后缀；**改名必须同时重写 md 里的链接**（链接指向带 ID 的名字），否则全断`,
+      });
+    }
+    const stripAll = (b) => b
+      .replace(/\.(md|csv|markdown)$/i, '')
+      .replace(ID_SUFFIX, '')
+      .replace(/(?:[- ]\d+)$/, '');
+    const byStemReal = new Map();
     for (const e of entries) {
       const base = e.path.split('/').pop();
-      const stem = stemOf(base);
-      if (stem === base.replace(/\.(md|csv|markdown)$/i, '')) continue;  // 没有后缀，不是生成式重名
-      byStem.set(stem, [...(byStem.get(stem) ?? []), e.path]);
+      const stem = stripAll(base);
+      byStemReal.set(stem, [...(byStemReal.get(stem) ?? []), e.path]);
     }
-    for (const [stem, paths] of byStem) {
-      losses.push({ construct: 'risk: generated duplicate suffix', evidence: paths[0], note: `${paths.length} 个文件带后缀指向同一基名「${stem}」（${paths.map((x) => x.split('/').pop()).join(', ')}）；替代品可能合并或覆盖` });
+    for (const [stem, paths] of byStemReal) {
+      if (paths.length > 1) losses.push({ construct: 'risk: true duplicate after stripping ids', evidence: paths[0], note: `${paths.length} 个文件剥掉页 ID/序号后同名「${stem}」（${paths.map((x) => x.split('/').pop()).join(', ')}）；替代品可能合并或覆盖` });
     }
 
     const manifest = {
@@ -384,9 +397,10 @@ function selfTest() {
     ensureDir(dsrc);
     writeFileSync(join(dsrc, 'Notes.md'), 'a', 'utf8');
     writeFileSync(join(dsrc, 'Notes-1.md'), 'b', 'utf8');
-    writeFileSync(join(dsrc, 'Notes 1a2b3c.md'), 'c', 'utf8');
+    writeFileSync(join(dsrc, 'Notes 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d.md'), 'c', 'utf8');
     const dres = buildExport({ from: dsrc, out: join(base, 'out-dup') });
-    ok('生成式重名后缀 ⇒ risk（按去后缀基名查出）', dres.losses.filter((l) => /generated duplicate suffix/.test(l.construct)).length >= 1);
+    ok('页 ID 后缀被识别并汇总（不逐文件刷屏）', dres.losses.filter((l) => /page-id suffix/.test(l.construct)).length === 1);
+    ok('剥掉 ID/序号后仍同名 ⇒ 报“真重名”', dres.losses.some((l) => /true duplicate after stripping ids/.test(l.construct)));
     ok('同名但不同目录仍单独报（两类互不替代）', (() => {
       const s2 = join(base, 'dupexact');
       ensureDir(join(s2, 'a'));
