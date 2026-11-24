@@ -137,3 +137,19 @@ Both directions are tested, because a predictor that only ever fires is not a pr
 | Saleor | 23,600 | BSD-3 | allowed, cleanest |
 | Vendure | 8,614 | GPLv3 or commercial | copyleft |
 | CoopCycle | 605 | custom "Coopyleft": commercial use reserved to qualifying entities | **restricted** |
+
+## How adoption is counted here (and why not views)
+
+Views are not evidence that anything happened. A page view, a star and a repo visit all mean "someone passed by"; none of them means someone tried to use the thing.
+
+This repo is meant to be run as `npx github:zjdyzww/exitkit`, which means **running it clones the repository** — and GitHub's traffic API reports clones. So the adoption signal I track is:
+
+| signal | what it means | where |
+|---|---|---|
+| **clones > 0** | someone actually fetched the code to run it | `repos/zjdyzww/exitkit/traffic/clones` |
+| issue containing a real export artefact | someone hit a case I did not imagine | GitHub issues |
+| a third project linking it in its onboarding | someone found it useful enough to vouch | — |
+
+**Not counted**: stars, views, "looks interesting" comments. The 30-day kill criterion in this README uses the first two rows only.
+
+As of 2026-11-24T13:00Z all three are **zero**, which is the honest headline for this project: the tooling exists and is tested, nothing has been seen or run yet.
