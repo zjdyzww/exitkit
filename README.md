@@ -108,7 +108,7 @@ Rather than guess, `src/dfc.mjs` reads the import mapping out of their source an
 |---|---|---|
 | `variant-name-overwritten` | `variant.display_name = supplied_product.name` (`supplied_product_importer.rb:117`) | each spec's own name is replaced by the product name |
 | `unit-taken-from-product-quantity` | `QuantitativeValueBuilder.apply(supplied_product.quantity, variant)`, `value = quantity.value * unit_scale` (`:119` + `quantitative_value_builder.rb:32`) | spec-level unit/scale is not used; kg↔g style scale changes |
-| `taxon-falls-back-to-first` | `taxons.first \|\| Spree::Taxon.first` (`product_type_importer.rb:19`, their own comment: "we return a random one") | if the target instance has no taxon for this `dfc_id`, the product lands in an arbitrary first category |
+| `taxon-falls-back-to-first` | `taxons.first \|\| Spree::Taxon.first` (`product_type_importer.rb:17`, their own comment: "we return a random one") | if the target instance has no taxon for this `dfc_id`, the product lands in an arbitrary first category |
 | `tax-category-not-applied` | `apply()` writes price and stock only (`offer_builder.rb:30`); read side is `super \|\| TaxCategory.find_by(is_default: true)` (`variant.rb:204-206`) | the source tax category is ignored and the **instance default** silently applies — a wrong rate, not a blank field |
 
 ```bash

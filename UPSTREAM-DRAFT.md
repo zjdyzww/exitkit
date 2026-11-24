@@ -58,7 +58,7 @@
 >
 > I saw #14950 already fixes the category fallback ("can't be mapped" -> keep existing), so I am not reporting that. What it does not cover, as far as I can read:
 >
-> `variant.display_name = supplied_product.name` (`:117`), `QuantitativeValueBuilder.apply(supplied_product.quantity, variant)` using the **product-level** quantity (`:119`, multipliers at `quantitative_value_builder.rb:99-102`), and the taxon lookup: `ProductTypeImporter.taxon` ends with `taxons.first || Spree::Taxon.first` (`product_type_importer.rb:19`) — their own comment says "If we don't find any matching taxon, we return a random one". So a catalog whose product type has no `dfc_id` in the target instance is filed under the **first** category rather than left unclassified. Those look like the same family as #14861/#14862/#14864.
+> `variant.display_name = supplied_product.name` (`:117`), `QuantitativeValueBuilder.apply(supplied_product.quantity, variant)` using the **product-level** quantity (`:119`, multipliers at `quantitative_value_builder.rb:99-102`), and the taxon lookup: `ProductTypeImporter.taxon` ends with `taxons.first || Spree::Taxon.first` (`product_type_importer.rb:17`) — their own comment says "If we don't find any matching taxon, we return a random one". So a catalog whose product type has no `dfc_id` in the target instance is filed under the **first** category rather than left unclassified. Those look like the same family as #14861/#14862/#14864.
 
 ## 若被回应"有用/可复现"
 

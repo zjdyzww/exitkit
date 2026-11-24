@@ -50,7 +50,7 @@ export const RULES = [
   },
   {
     id: 'taxon-falls-back-to-first',
-    at: 'engines/dfc_provider/app/services/product_type_importer.rb:19',
+    at: 'engines/dfc_provider/app/services/product_type_importer.rb:17',
     does: 'taxons.first || Spree::Taxon.first   // 源码注释自述：“If we don’t find any matching taxon, we return a random one”',
     issue: '#14864（open，有 PR）',
     upstream: 'PR #14950（open，2026-10-26，Closes #14864）已修：无映射时保留 variant 现有分类，再回落到产品分类，最后才第一个 taxon',
