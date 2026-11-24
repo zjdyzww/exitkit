@@ -13,13 +13,16 @@
 // @skill declare_unverifiable — 导出包**无法自证**的丢失（视图/公式/权限/评论）必须单列，写明"需你自查什么"
 // @skill write_receipt — <out>/receipt.md 人读收据：能带走 / 会丢 / 核不了，三段齐全
 // @skill verify — --verify <dir>：重算 sha256 与清单比对，missing/extra/mismatch 任一 ⇒ exit 1 并点名
+// @skill render_from_manifest — --report <dir>：不读源包、只从 manifest+losses 重出 receipt.md（幂等；缺清单则如实失败）
+// @skill flag_path_risks — 路径长度 ≥200 字符进 losses 的 risk（平台官方 FAQ 明写 Windows 260 字符限制），不当成丢失、也不忽略
 //
 // @rule no_network P0 — 本工具不发任何网络请求（只读本地导出包）；违反即视为缺陷
 // @rule no_silent_loss P0 — 任何未被 canonical 表达的文件或构造，必须出现在 losses；解析器不得静默跳过未知文件类型
 // @rule fail_loud_on_drift P0 — 结构不符合预期（导出包为空、0 字节文件、CSV 全空）⇒ 非零退出并点名，绝不产出"成功"的空收据
 // @rule receipt_three_parts P0 — receipt.md 必须同时含"能带走/会丢/核不了"三段；缺任一段即视为不合格产物
 // @rule unverifiable_is_declared P0 — 导出包无法证明的丢失，必须写成"需自查"条目，不得省略、不得写成已核实
-// @rule deterministic P1 — 同一输入两次运行，manifest.json 除 generatedAt 外逐字节相同
+// @rule deterministic P1 — 同一输入两次运行，manifest.json 除 generatedAt 外逐字节相同；--report 重出的 receipt 必须与首次写入内容一致
+// @rule risk_is_not_loss P1 — 超长路径等“风险”进 losses 的 risk 分类，不得写成已丢失，也不得静默忽略
 //
 // @depends node >= 20；系统 `unzip`（仅 --from *.zip 时需要）
 // @phase Phase1
@@ -29,6 +32,7 @@
 // @error empty_export — 导出包无任何文件 ⇒ exit 2（拒绝真空通过）
 // @error zero_byte_file — 导出包内存在 0 字节文件 ⇒ exit 2，点名（多半是导出未完成）
 // @error verify_mismatch — 哈希不符/文件缺失/多余文件 ⇒ exit 1，逐条点名
+// @error missing_manifest — --report 时找不到 manifest.json ⇒ exit 2，不产出空收据
 //
 // @metric files_total [type:counter]
 // @metric losses_detected [type:counter]
@@ -180,11 +184,21 @@ export function buildExport({ from, out, dryRun = false, version = VERSION }) {
       entries.push({ path: f.rel, sha256: digest, bytes: statSync(f.abs).size, kind, sourceRef: `${src.sourceName}:${f.rel}` });
       if (kind === 'other') losses.push({ construct: 'file type not migrated', evidence: f.rel, note: '未映射到 canonical 表达，原样保留但替代品多半不认' });
       if (kind === 'md') losses.push(...detectLossesInMarkdown(f.rel, readFileSync(f.abs, 'utf8')));
+      if (f.rel.length >= 200) losses.push({ construct: 'risk: very long path', evidence: f.rel, note: `${f.rel.length} 字符；平台 FAQ 明写 Windows 解压有 260 字符限制，迁移到本地前先缩短` });
       if (kind === 'csv') {
         const r = detectLossesInCsv(f.rel, readFileSync(f.abs, 'utf8'));
         losses.push(...r.losses);
         if (r.headerless) throw Object.assign(new Error(`CSV 首行不像表头：${f.rel}`), { code: 'csv_without_header' });
       }
+    }
+
+    const byBase = new Map();
+    for (const e of entries) {
+      const b = e.path.split('/').pop();
+      byBase.set(b, (byBase.get(b) ?? 0) + 1);
+    }
+    for (const [b, n] of byBase) {
+      if (n > 1) losses.push({ construct: 'risk: duplicate filename', evidence: b, note: `${n} 个文件同名（不同目录）；导入扁平化的替代品时会互相覆盖` });
     }
 
     const manifest = {
@@ -254,6 +268,20 @@ export function renderReceipt(manifest) {
 /* ------------------------------------------------------------------ */
 /* 核验                                                                */
 /* ------------------------------------------------------------------ */
+
+/** 只从已有产物重出收据（不读源包）。缺清单 ⇒ 如实失败，不产出空收据。 */
+export function report(out) {
+  const manifestPath = join(out, 'manifest.json');
+  if (!existsSync(manifestPath)) {
+    throw Object.assign(new Error(`找不到 manifest.json：${manifestPath}`), { code: 'missing_manifest' });
+  }
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const receipt = renderReceipt(manifest);
+  const dest = join(out, 'receipt.md');
+  const before = existsSync(dest) ? readFileSync(dest, 'utf8') : null;
+  writeFileSync(dest, receipt, 'utf8');
+  return { receipt, changed: before !== null && before !== receipt, wrote: true };
+}
 
 export function verify(out) {
   const manifestPath = join(out, 'manifest.json');
@@ -326,6 +354,22 @@ function selfTest() {
     try { buildExport({ from: emptyDir, out: join(base, 'out2') }); } catch (e) { code = e.code; }
     ok('负例 空导出包 ⇒ empty_export', code === 'empty_export');
 
+    // risk 分类：超长路径必须是 risk 而不是丢失，也不得忽略
+    const longName = 'x'.repeat(210) + '.md';
+    const lsrc = join(base, 'longpath');
+    ensureDir(lsrc);
+    writeFileSync(join(lsrc, longName), 'hello', 'utf8');
+    const rout = join(base, 'out-long');
+    const rlong = buildExport({ from: lsrc, out: rout });
+    ok('超长路径进 risk（且不写成丢失）', rlong.losses.some((l) => /risk: very long path/.test(l.construct)));
+    // --report 幂等：重出的收据内容必须与首次一致
+    const rep = report(rout);
+    ok('--report 重出收据幂等（内容不变）', rep.changed === false);
+    // --report 缺清单 ⇒ missing_manifest
+    let code3 = null;
+    try { report(join(base, 'no-such-out')); } catch (e) { code3 = e.code; }
+    ok('负例 缺 manifest ⇒ missing_manifest', code3 === 'missing_manifest');
+
     // 负例 4：0 字节文件 → 必须红
     const zsrc = join(base, 'zero');
     ensureDir(zsrc);
@@ -352,6 +396,18 @@ function arg(name, dflt = null) {
 
 function main() {
   if (process.argv.includes('--self-test')) process.exit(selfTest());
+  if (process.argv.includes('--report')) {
+    const out = arg('--report');
+    if (!out) { console.error('用法：--report <目录>'); process.exit(2); }
+    try {
+      const r = report(out);
+      console.log(`OK：收据已重出 → ${join(out, 'receipt.md')}（内容变化：${r.changed ? '是' : '否'}）`);
+      process.exit(0);
+    } catch (err) {
+      console.error(`ERROR ${err.code ?? ''}: ${err.message}`);
+      process.exit(2);
+    }
+  }
   if (process.argv.includes('--verify')) {
     const out = arg('--verify');
     if (!out) { console.error('用法：--verify <目录>'); process.exit(2); }

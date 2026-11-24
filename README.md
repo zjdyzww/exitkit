@@ -11,6 +11,7 @@ Anyone can re-check the first two without trusting me:
 ```bash
 node src/exitkit.mjs --from export.zip --out ./out   # or --from ./exported-folder
 node src/exitkit.mjs --verify ./out                  # recomputes every hash; exits 1 on any mismatch
+node src/exitkit.mjs --report ./out                  # re-render the receipt from manifest.json (no source needed)
 ```
 
 Real output from a sample export (2026-11-24):
@@ -29,6 +30,7 @@ OK：4 个文件 → ./out
 | 能带走什么 | N 个文件，按 kind 分类，逐个 sha256 | 让你能独立复核，而不是相信"已迁移" |
 | 会丢什么 | **从导出包里检出**的丢失：指向包外页面的关系链接、无 Markdown 等价物的内嵌 HTML、未映射的文件类型 —— 每条带证据路径与计数 | 这些是有字节证据的 |
 | 我核不了什么 | 视图/筛选、公式与 rollup 的定义、权限与共享、评论、版本历史、模板与自动化 | **导出包物理上不含**这些；写成"已迁移"就是撒谎 |
+| 风险（不是丢失） | 路径 ≥200 字符、不同目录下的同名文件 | 迁移后才会咬人：Windows 解压 260 字符上限（平台 FAQ 明写）、扁平化导入时互相覆盖 |
 
 > 一份诚实的收据必须写出它核不了的东西。只写"已迁移 N 个文件"的收据，是把风险留给用户。
 
@@ -52,6 +54,8 @@ node src/exitkit.mjs --self-test     # 10 例，全部离线
 | 等长篡改一个字节（大小不变） | `--verify` 红并点名 —— 只有哈希能抓到，字节数抓不到 |
 | 让 `other` 类型不进 losses | 自检红（"未把未知类型静默丢弃"失败） |
 | 把空扩展名塞进 asset 白名单 | 自检红 ×2（无扩展名文件会被误判成 asset，等于静默丢失） |
+| 关掉超长路径的 risk 检出 | 自检红（"风险"被静默吞掉） |
+| 让 `--report` 每次附加时间戳 | 自检红（破坏幂等：同一份清单重出的收据必须逐字节相同） |
 
 ## 预注册的止损判据（30 天）
 
@@ -65,7 +69,7 @@ node src/exitkit.mjs --self-test     # 10 例，全部离线
 
 ## 状态（如实）
 
-- `--from` 目录 / zip、`canonical/`、`manifest.json`、`losses.json`、`receipt.md`、`--verify`、`--dry-run`、`--self-test`：**已实现且自检通过**。
+- `--from` 目录 / zip、`canonical/`、`manifest.json`、`losses.json`、`receipt.md`、`--verify`、`--report`、`--dry-run`、`--self-test`（13 例）：**已实现且自检通过**。
 - **尚未**在真实平台导出包上验证过（等一份真实导出；这是唯一挡住 Phase 1.1 的东西）。在跑过真包之前，本 README 里任何"能还原"的暗示都应视为**未验证**。
 - 目标垂直的选择与理由见 `PHASE0-selection.md`。
 
