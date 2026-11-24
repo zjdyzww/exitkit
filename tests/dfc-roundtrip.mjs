@@ -60,7 +60,11 @@ const taxUp = losses.find((l) => /taxCategory/.test(l.field));
 const catUp = losses.find((l) => /categories/.test(l.field));
 ok('分类规则标注了上游 PR #14950（已知在修）', !!catUp && /14950/.test(catUp.upstream ?? ''));
 ok('税规则标注为“无人跟进”', !!taxUp && (taxUp.upstream ?? null) === null);
-ok('收据渲染出上游状态列', /上游状态/.test(renderReceipt(losses)) && /无人跟进/.test(renderReceipt(losses)));
+ok('收据同时渲染“已知条目”与“上游状态”两列', /已知条目/.test(renderReceipt(losses)) && /上游状态/.test(renderReceipt(losses)));
+
+// 不装原创：每条规则都必须能指出“这已经是上游已公开的条目”
+ok('每条规则都标注了已知条目编号', RULES.every((r) => /#\d+/.test(r.issue ?? '')), RULES.filter((r) => !/#\d+/.test(r.issue ?? '')).map((r) => r.id).join(',') || 'all ok');
+ok('收据显式声明“不声称发现新 bug”', /不声称发现任何新 bug/.test(renderReceipt(losses)));
 
 // 方向一(b)：同一物理量的两种写法（1 KILOGRAM vs 1000 GRAM）必须都被识别为“标度会变”，且带精确乘数
 const kg = JSON.parse(readFileSync(join(here, '..', 'fixtures', 'dfc', 'gram-vs-kilogram.json'), 'utf8'));

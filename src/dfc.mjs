@@ -35,12 +35,14 @@ import { readFileSync } from 'node:fs';
 export const RULES = [
   {
     id: 'variant-name-overwritten',
+    issue: '#14861 / #14863（open，无 PR）',
     at: 'engines/dfc_provider/app/services/supplied_product_importer.rb:117',
     does: 'variant.display_name = supplied_product.name',
     means: '每个 spec 自己的名字会被**商品名**覆盖；spec 名（如“Bouteille / 500g 装”）在导入后消失',
   },
   {
     id: 'unit-taken-from-product-quantity',
+    issue: '#14862 / #14861（open，无 PR）',
     at: 'engines/dfc_provider/app/services/supplied_product_importer.rb:119',
     also: 'engines/dfc_provider/app/services/quantitative_value_builder.rb:32,99-102',
     does: 'QuantitativeValueBuilder.apply(supplied_product.quantity, variant); value = quantity.value * unit_scale；map_unit: KILOGRAM→1000, GRAM→1, LITRE→1, MILLILITRE→0.001',
@@ -50,11 +52,13 @@ export const RULES = [
     id: 'taxon-falls-back-to-first',
     at: 'engines/dfc_provider/app/services/product_type_importer.rb:19',
     does: 'taxons.first || Spree::Taxon.first   // 源码注释自述：“If we don’t find any matching taxon, we return a random one”',
+    issue: '#14864（open，有 PR）',
     upstream: 'PR #14950（open，2026-10-26，Closes #14864）已修：无映射时保留 variant 现有分类，再回落到产品分类，最后才第一个 taxon',
     means: '分类只按单个 productType 查 dfc_id 映射；**查不到就落到该实例的第一个分类**。是否能对上取决于目标实例的 dfc_id 表，导出方无法预知',
   },
   {
     id: 'tax-category-not-applied',
+    issue: '#14865（open，无 PR）',
     at: 'engines/dfc_provider/app/services/offer_builder.rb:30',
     also: 'app/models/spree/variant.rb:204-206',
     does: 'variant.price = price(offer)   // apply() 只写 price 与 stockLimitation；读侧 tax_category = super || TaxCategory.find_by(is_default: true)',
@@ -144,6 +148,7 @@ export function predictLosses({ products }) {
       losses.push({
         field: 'product.categories[]', scope: `product:${p.name}`, rule: r.id, at: r.at,
         detail: `源 productType=${types.join(' / ')}；只按单个类型查 dfc_id 映射，**查不到就落到目标实例的第一个分类**（源码注释自述 random）。映射是否存在我无法从仓库判断`,
+        issue: r.issue ?? null,
         upstream: r.upstream ?? null,
       });
     }
@@ -170,9 +175,11 @@ export function renderReceipt(losses, { commit = OFN_COMMIT } = {}) {
     lines.push('未预测到字段级丢失（不代表真的不丢：本模型只覆盖 4 条已读源码的规则）。');
     return lines.join('\n');
   }
-  lines.push('| 字段 | 范围 | 会丢什么 | 出处 | 上游状态 |');
+  lines.push('| 字段 | 会丢什么 | 出处 | 已知条目 | 上游状态 |');
   lines.push('|---|---|---|---|---|');
-  for (const l of losses) lines.push(`| \`${l.field}\` | ${l.scope} | ${l.detail} | \`${l.at}\` | ${l.upstream ?? '**无人跟进**'} |`);
+  for (const l of losses) lines.push(`| \`${l.field}\` | ${l.detail} | \`${l.at}\` | ${l.issue ?? '**无**'} | ${l.upstream ?? '—'} |`);
+  lines.push('');
+  lines.push('> **本工具不声称发现任何新 bug。** 上述条目都是上游已公开的 issue；这里提供的是**可引用的机制与行号**，以及一个能离线重算的模型。');
   lines.push('');
   lines.push('## 核不了（必须你在真实实例上验）');
   lines.push('');
